@@ -19,7 +19,7 @@ library(pbapply)
 # Load Data ---------------------------------------------------------------
 
 
-df_porites = read_csv("Markdowns/data/processed/df_porites.csv") |> 
+df_porites = read_csv("data/df_porites.csv") |> 
   mutate(transition = factor(transition, levels = c("t1", "t2")))
 
 
@@ -117,8 +117,7 @@ pasfd2 = ggplot(df_longt2, aes(size, fill = area_type)) +
 
 ggpubr::ggarrange(
   pasfd1, pasfd2,
-  ncol = 2, nrow = 2,
-  labels = c("A)", "B)", "C)", "D)"),
+  labels = c("A)", "B)"),
   common.legend = TRUE, legend = "bottom")
 
 #ggsave('figures/results/sup/SFD_all.png', units = 'in', width = 14, height = 12, dpi = 600)
@@ -167,82 +166,18 @@ summary_stats <- df_long %>%
     names_glue  = "{.value}_{area_type}"
   )
 
-## 3. Join stats + KS p, format, and relabel transitions
-ks_table_data <- summary_stats %>%
-  left_join(ks_results, by = "transition") %>%
-  mutate(
-    transition = recode(transition,
-                        t1 = "2021–2022",
-                        t2 = "2022–2023"),
-    across(starts_with("mean_size"),   ~ round(., 2)),
-    across(starts_with("median_size"), ~ round(., 2)),
-    ks_p = pvalue(ks_p, accuracy = 0.001)
-  )
 
-## 4. Convert to flextable
-ks_flex <- ks_table_data %>%
-  flextable() %>%
-  set_caption("Table X. Kolmogorov–Smirnov tests and summary statistics for colony size distributions between years") %>%
-  set_header_labels(
-    transition          = "Transition",
-    mean_size_area1     = "Mean size (previous year)",
-    mean_size_area2     = "Mean size (next year)",
-    median_size_area1   = "Median size (previous year)",
-    median_size_area2   = "Median size (next year)",
-    ks_p                = "KS p-value"
-  ) %>%
-  autofit()
-
-## 5. Add to Word doc and save
-doc <- read_docx() %>%
-  body_add_par("Kolmogorov–Smirnov tests for size distributions", 
-               style = "heading 1") %>%
-  body_add_flextable(ks_flex)
-
-print(doc, target = "Markdowns/tables/processed/ks_size_distributions.docx")
-
-df_small <- df_long %>%
-  filter(action == "born",
-         area_type == "area2",
-         size < 5)
-
-
-
-ggplot(df_small, aes(x = size, fill = transition)) +
-  geom_histogram(binwidth = 0.5, alpha = 0.8, position = "identity") +
-  scale_fill_viridis_d(option = "H", begin = .9,end = .2,
-                       labels = c(t1 = "2022", t2 = "2023")) +
-  scale_x_continuous(
-    name   = "Colony size (mm²)",
-    limits = c(0, 5),
-    expand = c(0, 0)
-  ) +
-  scale_y_continuous(
-    name   = "Count",
-    limits = c(0, 180),   # adjust max as needed
-    expand = c(0, 0)
-  ) +
-  labs(fill = "Recruits in")+
-  theme_classic()+ 
-  theme(axis.title = element_text(size = 16, face = "bold"),
-        legend.title = element_text(size = 16, face = "bold"),
-        strip.text = element_text(size = 16, face = "bold"),
-        axis.text  = element_text(size = 14),
-        legend.text = element_text(size = 12)) 
 
 #ggsave('figures/results/sup/Recruits_bar.png', units = 'in', width = 10, height = 8, dpi = 600)
 
 
-## 1) Restrict to P. astreoides if df has species column
-# df_pa <- df %>% filter(species == "P. astreoides")
-
-## 2) Pivot as you already do
+# 1) Pivot 
 df_long <- df_porites |> 
   pivot_longer(cols = c(area1, area2),
                names_to = "area_type",
                values_to = "size")
 
-## 3) Compare across transitions using the SAME area_type (area2)
+## 2) Compare across transitions using the SAME area_type (area2)
 df_pa_area2 <- df_long %>%
   filter(area_type == "area2") %>%            # compare "next year" only
   filter(!is.na(size))
@@ -284,7 +219,6 @@ plot(ggpredict(g_global2, terms = c("log_size", "transition")))
 
 pred <- ggpredict(g_global2, terms = c("log_size", "transition"))
 pred_df <- as.data.frame(pred)
-# columns: x, predicted, conf.low, conf.high, group (transition)
 
 # Relabel transitions if you want nicer labels
 pred_df$group <- dplyr::recode(pred_df$group,
@@ -315,39 +249,6 @@ growth = ggplot(pred_df,
         legend.text = element_text(size = 12))
 
 #ggsave('figures/results/Growth_model.png', units = 'in', width = 10, height = 8, dpi = 600)
-
-# Tidy the lm model
-# g_tidy <- tidy(g_global2)
-# 
-# # Format and turn into flextable
-# g_table <- g_tidy %>%
-#   mutate(
-#     term = recode(term,
-#                   "(Intercept)"          = "Intercept",
-#                   "log_size"             = "log(Size)",
-#                   "transitiont2"         = "Transition (t2 vs t1)",
-#                   "log_size:transitiont2"= "log(Size) × Transition"),
-#     across(c(estimate, std.error, statistic), ~ round(., 3)),
-#     p.value = pvalue(p.value, accuracy = 0.001)
-#   ) %>%
-#   flextable() %>%
-#   set_caption("Table X. Linear model of log colony size at time t+1 as a function of log size and transition") %>%
-#   set_header_labels(
-#     term       = "Term",
-#     estimate   = "Estimate",
-#     std.error  = "Std. Error",
-#     statistic  = "t value",
-#     p.value    = "p-value"
-#   ) %>%
-#   autofit()
-# 
-# # Create Word doc and add the table
-# doc <- read_docx() %>%
-#   body_add_par("Linear model of growth (g_global2)", style = "heading 1") %>%
-#   body_add_flextable(g_table)
-# 
-# # Save the Word document
-# print(doc, target = "tables/growth_global_lm_table.docx")
 
 
 
@@ -394,37 +295,7 @@ survival = ggplot(pred_survival_df,
 # 
 # ggsave('figures/results/survival_model.png', units = 'in', width = 10, height = 8, dpi = 600)
 
-# s_tidy <- tidy(s_global)
-# 
-# # 2. Format table
-# s_table <- s_tidy %>%
-#   mutate(
-#     term = recode(term,
-#                   "(Intercept)"           = "Intercept",
-#                   "log_size"              = "log(Size)",
-#                   "transitiont2"          = "Transition (t2 vs t1)",
-#                   "log_size:transitiont2" = "log(Size) × Transition"),
-# 
-#     across(c(estimate, std.error, statistic), ~ round(., 3)),
-#     p.value = pvalue(p.value, accuracy = 0.001)
-#   ) %>%
-#   flextable() %>%
-#   set_caption("Table X. Logistic regression of coral survival as a function of size and transition") %>%
-#   set_header_labels(
-#     term       = "Term",
-#     estimate   = "Estimate",
-#     std.error  = "Std. Error",
-#     statistic  = "z value",
-#     p.value    = "p-value"
-#   ) %>%
-#   autofit()
-# 
-# doc <- read_docx() %>%
-#   body_add_par("Survival GLM (s_global)", style = "heading 1") %>%
-#   body_add_flextable(s_table)
-# 
-# # 4. Save Word document
-# print(doc, target = "tables/global_survival_table.docx")
+
 
 
 
@@ -468,38 +339,6 @@ repro = ggplot(pred_repro_df,
 
 # ggsave('figures/results/repro_model.png', units = 'in', width = 10, height = 8, dpi = 600)
 
-# r_tidy <- tidy(r_global)
-# 
-# # 2. Format and label
-# r_table <- r_tidy %>%
-#   mutate(
-#     term = recode(
-#       term,
-#       "(Intercept)"           = "Intercept",
-#       "log_size"              = "log(Size)",
-#       "transitiont2"          = "Transition (t2 vs t1)",
-#       "log_size:transitiont2" = "log(Size) × Transition"
-#     ),
-#     across(c(estimate, std.error, statistic), ~ round(., 3)),
-#     p.value = pvalue(p.value, accuracy = 0.001)
-#   ) %>%
-#   flextable() %>%
-#   set_caption("Table X. Logistic regression of reproduction as a function of size and transition") %>%
-#   set_header_labels(
-#     term      = "Term",
-#     estimate  = "Estimate",
-#     std.error = "Std. Error",
-#     statistic = "z value",
-#     p.value   = "p-value"
-#   ) %>%
-#   autofit()
-# 
-# doc <- read_docx() %>%
-#   body_add_par("Reproduction GLM (r_global)", style = "heading 1") %>%
-#   body_add_flextable(r_table)
-# 
-# print(doc, target = "tables/r_global_repro_table.docx")
-
 
 
 ### Seeds -------------------------------------------------------------------
@@ -538,40 +377,6 @@ recruit = ggplot(pred_seed_df,
         legend.text = element_text(size = 12))
 
 #ggsave('figures/results/recruit_model.png', units = 'in', width = 10, height = 8, dpi = 600)
-# recr_tidy <- tidy(seed_global, effects = "fixed")
-# 
-# # 2. Format table
-# recr_table <- recr_tidy %>%
-#   mutate(
-#     term = recode(
-#       term,
-#       "(Intercept)"           = "Intercept",
-#       "log_size"              = "log(Size)",
-#       "transitiont2"          = "Transition (t2 vs t1)",
-#       "log_size:transitiont2" = "log(Size) × Transition"
-#     ),
-#     across(c(estimate, std.error, statistic), ~ round(., 3)),
-#     p.value = pvalue(p.value, accuracy = 0.001)
-#   ) %>%
-#   flextable() %>%
-#   set_caption("Table X. Negative binomial model of recruit counts as a function of colony size and transition") %>%
-#   set_header_labels(
-#     term      = "Term",
-#     estimate  = "Estimate",
-#     std.error = "Std. Error",
-#     statistic = "z value",
-#     p.value   = "p-value"
-#   ) %>%
-#   autofit()
-# 
-# # 3. Add to Word document
-# doc <- read_docx() %>%
-#   body_add_par("Recruitment Model (recruits_global)", style = "heading 1") %>%
-#   body_add_flextable(recr_table)
-# 
-# # 4. Save the Word document
-# print(doc, target = "tables/recruits_global_table.docx")
-
 
 
 ### Plot --------------------------------------------------------------------
@@ -760,8 +565,8 @@ ggplot(lambda_mesh, aes(mesh_size, lambda)) +
 
 ### IPM Function ------------------------------------------------------------
 
-L <- min(c(df$log_size, df$log_size_next), na.rm = TRUE) * 1.2
-U <- max(c(df$log_size, df$log_size_next), na.rm = TRUE) * 1.2
+L <- min(c(df_porites$log_size, df_porites$log_size_next), na.rm = TRUE) * 1.2
+U <- max(c(df_porites$log_size, df_porites$log_size_next), na.rm = TRUE) * 1.2
 
 
 
@@ -919,8 +724,8 @@ ipm_global2 <- init_ipm(sim_gen = "simple", di_dd = "di", det_stoch = "det") %>%
     )
   ) %>%
   define_domains(
-    sa = c(L2,
-           U2,
+    sa = c(L,
+           U,
            200)
   ) %>%
   define_pop_state(n_sa = runif(200)) %>%
@@ -1116,7 +921,7 @@ lambda(ipm_global2)
 ### Boostrap data -----------------------------------------------------------
 
 
-all_lambdas = read_csv("Markdowns/data/global_ipm_lambda_bootstrap.csv")  
+all_lambdas = read_csv("data/global_ipm_lambda_bootstrap.csv")  
 
 ### Density Plot ###
 
@@ -1319,7 +1124,7 @@ p_plt_port1 <- ggplot(p_df_port1) +
 
 p_plt_port1
 
-# 1) Conditional *mean* size at t+1 for each t
+# 1) Conditional mean size at t+1 for each t
 ridge_mean_port1 <- p_df_port1 |>
   dplyr::group_by(t) |>
   dplyr::summarise(t1_bar = sum(t_1 * value) / sum(value), .groups = "drop") |>
@@ -1432,4 +1237,10 @@ ridge_mean_port2 <- p_df_port2 |>
 p_plt_port2 +
   geom_line(data = ridge_mean_port2, aes(x = t, y = t1_bar),
             linewidth = 1.1, color = "white")
+
+# Stochastic variability --------------------------------------------------
+
+
+# Reproduction Variability ------------------------------------------------
+
 

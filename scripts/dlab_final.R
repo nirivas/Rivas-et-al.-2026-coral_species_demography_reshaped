@@ -23,7 +23,7 @@ library(pbapply)
 # Load Data ---------------------------------------------------------------
 
 
-df_diploria = read_csv("Markdowns/data/processed/df_diploria.csv") |> 
+df_diploria = read_csv("data/df_diploria.csv") |> 
   mutate(transition = factor(transition, levels = c("t1", "t2")))
 
 
@@ -491,7 +491,7 @@ ggarrange(a_dlab, b_dlab,
 ### Boostrap data -----------------------------------------------------------
 
 
-all_lambdas_dlab = read_csv("Markdowns/data/dlab_gloval_ipm_lambda_bootstrap.csv")  
+all_lambdas_dlab = read_csv("data/dlab_global_ipm_lambda_bootstrap.csv")  
 
 ### Density Plot ###
 
